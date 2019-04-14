@@ -1,0 +1,253 @@
+
+
+#include <stdio.h>
+#include "mcp2210_dll_um.h"
+#include <time.h>
+
+
+
+
+
+int main()
+{
+   int a=0, i=0, connectedDeviceNumber = 0;
+   unsigned int index=0;
+   unsigned int ptxferSize[1], pbaudRate[1], pidleCsVal[1], pactiveCsVal[1], pCsToDataDly[1],pdataToCsDly[1], pdataToDataDly[1];
+   unsigned short vid=0x4D8, pid=0xDE;
+   unsigned char pGpioPinDes[9], pspiMd[1], pdataTx[2], pdataRx[2];
+   wchar_t version[8], serialStr[64];
+   void* handle;
+
+
+
+ for (i=0;i<9;i++)
+   {
+      version[i]= 0x0;
+   }
+
+ for (i=0;i<65;i++)
+   {
+      serialStr[i]= 0x0;
+   }
+
+   a= Mcp2210_GetLibraryVersion(version);
+
+    printf("The dll version is ");
+   for (i=0;i<7;i++)
+   {
+      printf("%c", version[i]);
+   }
+      printf("\n");
+
+    printf("Size of returned buffer including null character is %d \n", a);
+
+
+    connectedDeviceNumber = Mcp2210_GetConnectedDevCount(vid, pid);
+
+    printf("Compatible number of physical SPI devices connected to computer is %d \n" , connectedDeviceNumber);
+
+    index = connectedDeviceNumber-1;
+
+
+    handle = Mcp2210_OpenByIndex(vid, pid, index, 0x0, 0x0);
+
+
+    a = Mcp2210_GetSerialNumber(handle, serialStr);
+
+    printf("Serial number of connected device is ");
+
+    for (i=0;i<63;i++)
+   {
+      printf("%c", serialStr[i]);
+   }
+      printf("\n");
+
+    for (i=0;i<10;i++)
+   {
+      pGpioPinDes[i]= 0x00;
+   }
+
+      pGpioPinDes[0] = 0x01;
+
+
+    a = Mcp2210_SetGpioConfig(handle, 0x0, pGpioPinDes, 0x0, 0x02, 0x0, 0x0, 0x0);
+
+    printf("Set GPIO Config Success Status is:  %d \n", a);
+
+    ptxferSize[0] = 2;
+    pbaudRate[0] = 20000;
+    pidleCsVal[0] = 0x01;
+    pactiveCsVal[0] = 0x00;  //For lightning sensor chip
+    pCsToDataDly[0] = 0x0;
+    pdataToCsDly[0] = 0x0;
+    pdataToDataDly[0] = 0x0;
+    pspiMd[0] = 0x01;
+
+    a = Mcp2210_SetSpiConfig (handle, 0, pbaudRate, pidleCsVal, pactiveCsVal, pCsToDataDly, pdataToCsDly, pdataToDataDly, ptxferSize, pspiMd);
+
+    printf("Set SPI Config Success Status is:  %d \n", a);
+
+   // Now prepare for transfer two bytes data
+
+
+
+//Rx01:noise floor level
+    pdataTx[0]= (0x00<<6)+ 0x01;   //  read/write  + register address
+
+    pdataTx[1] = 0b00101110;             // garbage for reading, data for writing
+
+    printf("SPI Data Sent Value of Rx01: \n");
+
+
+    printf("%02X %02X \n", pdataTx[0], pdataTx[1]);   // see what is sent
+
+
+    pdataRx[0] = 0x00;          // clear receive buffer
+    pdataRx[1] = 0x00;
+
+    a = Mcp2210_xferSpiData(handle, pdataTx, pdataRx, pbaudRate, ptxferSize, 0x01);  // now activate transfer
+
+    printf("Check write success of Rx01:  %d \n", a);
+
+    printf("SPI Data Received Value Rx01: \n");
+
+    printf("%02X %02X \n", pdataRx[1], pdataRx[0]);   // see read buffer
+
+
+
+   //Rx03:interrupt
+    pdataTx[0]= (0x01<<6)+ 0x03;   //  read/write  + register address
+
+    pdataTx[1] = 0b00000000;             // garbage for reading, data for writing
+
+    printf("SPI Data Sent Value Rx03: \n");
+
+
+    printf("%02X %02X \n", pdataTx[0], pdataTx[1]);   // see what is sent
+
+
+    pdataRx[0] = 0x00;          // clear receive buffer
+    pdataRx[1] = 0x00;
+
+    a = Mcp2210_xferSpiData(handle, pdataTx, pdataRx, pbaudRate, ptxferSize, 0x01);  // now activate transfer
+
+    printf("Check write success Rx03:  %d \n", a);
+
+    printf("SPI Data Received Value Rx03: \n");
+
+    printf("%02X %02X \n", pdataRx[1], pdataRx[0]);   // see read buffer
+
+    if(pdataRx[1]==0x01)
+    {
+        printf(".....Noise level too high \n");
+        time_t rawtime;
+        struct tm * timeinfo;
+
+        time ( &rawtime );
+        timeinfo = localtime ( &rawtime );
+        printf ( "Current local time and date: %s", asctime (timeinfo) );
+    }
+    if(pdataRx[1]==0x4)
+
+    {
+        printf(".....Disturber detected \n");
+        time_t rawtime;
+        struct tm * timeinfo;
+
+        time ( &rawtime );
+        timeinfo = localtime ( &rawtime );
+        printf ( "Current local time and date: %s", asctime (timeinfo) );
+    }
+    if(pdataRx[1]==0x08)
+    {
+        printf(".....lightning detected \n");
+        time_t rawtime;
+        struct tm * timeinfo;
+
+        time ( &rawtime );
+        timeinfo = localtime ( &rawtime );
+        printf ( "Current local time and date: %s", asctime (timeinfo) );
+    }
+
+//Rx04:Energy of the Single Lightning LSBYTE
+
+    pdataTx[0]= (0x01<<6)+ 0x04;   //  read/write  + register address
+
+    pdataTx[1] = 0b00000000;             // garbage for reading, data for writing
+
+    printf("SPI Data Sent Value Rx04: \n");
+
+
+    printf("%02X %02X \n", pdataTx[0], pdataTx[1]);   // see what is sent
+
+
+    pdataRx[0] = 0x00;          // clear receive buffer
+    pdataRx[1] = 0x00;
+
+    a = Mcp2210_xferSpiData(handle, pdataTx, pdataRx, pbaudRate, ptxferSize, 0x01);  // now activate transfer
+
+    printf("Check write success Rx04:  %d \n", a);
+
+    printf("SPI Data Received Value Rx04: \n");
+
+    printf("%02X %02X \n", pdataRx[1], pdataRx[0]);   // see read buffer
+
+//Rx05:Energy of the Single Lightning MSBYTE
+
+    pdataTx[0]= (0x01<<6)+ 0x05;   //  read/write  + register address
+
+    pdataTx[1] = 0b00000000;             // garbage for reading, data for writing
+
+    printf("SPI Data Sent Value Rx05: \n");
+
+
+    printf("%02X %02X \n", pdataTx[0], pdataTx[1]);   // see what is sent
+
+
+    pdataRx[0] = 0x00;          // clear receive buffer
+    pdataRx[1] = 0x00;
+
+    a = Mcp2210_xferSpiData(handle, pdataTx, pdataRx, pbaudRate, ptxferSize, 0x01);  // now activate transfer
+
+    printf("Check write success of Rx05:  %d \n", a);
+
+    printf("SPI Data Received Value of Rx05: \n");
+
+    printf("%02X %02X \n", pdataRx[1], pdataRx[0]);   // see read buffer
+
+
+//Rx07:distance measurement:
+
+    pdataTx[0]= (0x01<<6)+ 0x07;   //  read/write  + register address
+
+    pdataTx[1] = 0b00000000;             // garbage for reading, data for writing
+
+    printf("SPI Data Sent Value of Rx07:Distance \n");
+
+
+    printf("%02X %02X \n", pdataTx[0], pdataTx[1]);   // see what is sent
+
+
+    pdataRx[0] = 0x00;          // clear receive buffer
+    pdataRx[1] = 0x00;
+
+    a = Mcp2210_xferSpiData(handle, pdataTx, pdataRx, pbaudRate, ptxferSize, 0x01);  // now activate transfer
+
+    printf("Check write success of Rx07:  %d \n", a);
+
+    printf("SPI Data Received Value of Rx07: \n");
+
+    printf("%02X %02X \n", pdataRx[1], pdataRx[0]);   // see read buffer
+
+
+
+    a = Mcp2210_Close(handle);
+    printf("Check handle close success:  %d \n", a);
+    return 0;
+
+}
+
+
+
+
+
