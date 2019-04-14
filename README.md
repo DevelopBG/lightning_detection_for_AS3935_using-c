@@ -1,0 +1,2 @@
+# lightning_detection_for_AS3935_using-c
+install
